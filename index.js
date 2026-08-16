@@ -166,7 +166,9 @@ async function startBot() {
                         // Generate pairing code
                         const code = await sock.requestPairingCode(cleanNumber);
                         
-                        await sock.sendMessage(from, { text: `✅ Pairing code sent to +${cleanNumber}!\n\n📱 Code: ${code}\n\nOpen WhatsApp → Settings → Linked Devices → Link with Phone Number → Enter this code.` });
+                        await sock.sendMessage(from, {
+                            text: `✅ Pairing code sent to +${cleanNumber}!\n\n📱 Code: ${code}\n\nOpen WhatsApp → Settings → Linked Devices → Link a device → Use \"Link a device\" and scan the QR code.`
+                        });
                         
                         console.log(`📱 Pairing code generated for +${cleanNumber}: ${code}`);
                     } catch (e) {
@@ -182,14 +184,14 @@ async function startBot() {
                 if (cmd === 'menu') {
                     await sock.sendMessage(from, { text: `📌 ADEZ MD MENU
 
-🤖 AI: mistral, claudeai, bard
-👥 GROUP: tagall, kick, promote
-📥 DOWNLOADER: play, video, instagram
-👑 OWNER: eval, restart, uptime
-⚙️ SETTINGS: antibot, antispam
-📦 Use !help <command> for details
+ 🤖 AI: mistral, claudeai, bard
+ 👥 GROUP: tagall, kick, promote
+ 📥 DOWNLOADER: play, video, instagram
+ 👑 OWNER: eval, restart, uptime
+ ⚙️ SETTINGS: antibot, antispam
+ 📦 Use !help <command> for details
 
-🔑 PAIR: !pair <number>` });
+ 🔑 PAIR: !pair <number>` });
                 }
                 if (cmd === 'owner') {
                     await sock.sendMessage(from, { text: '👤 Owner: Arnold Adez\n📞 +254111783552' });
