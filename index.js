@@ -1,11 +1,11 @@
-const crypto = require('crypto'); // ✅ ADD THIS LINE
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+// ✅ Polyfill crypto for Render
+global.crypto = require('crypto');
+
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const express = require('express');
 const fs = require('fs');
-const path = require('path');
 const pino = require('pino');
-const { Buffer } = require('buffer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,7 +66,6 @@ async function startBot() {
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.message || 'unknown';
             console.log(`❌ Disconnected: ${reason}. Reconnecting in 5s...`);
-            
             setTimeout(startBot, 5000);
         }
 
