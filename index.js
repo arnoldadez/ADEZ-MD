@@ -1,12 +1,11 @@
 // ✅ Polyfill crypto for Render
 global.crypto = require('crypto');
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const express = require('express');
 const fs = require('fs');
 const pino = require('pino');
-const { Buffer } = require('buffer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +14,9 @@ const PORT = process.env.PORT || 3000;
 const SESSION_DIR = './session';
 if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR);
 
+// Config
+const OWNER_NUMBER = '254111783552'; // Your number without +
+
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
     
@@ -22,12 +24,16 @@ async function startBot() {
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: ['ADEZ MD', 'Chrome', '2.0.0'],
-        connectTimeoutMs: 60000, // 60 seconds timeout
-        keepAliveIntervalMs: 30000 // 30 seconds keep-alive
+        browser: Browsers.ubuntu('ADEZ MD'),
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000,
+        generateHighQualityLinkPreview: true
     });
 
-    // QR Code Handler
+    // Store the socket globally for pair code
+    global.sock = sock;
+
+    // QR Code Handler (as fallback)
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
@@ -56,6 +62,7 @@ async function startBot() {
                     <img src="${qrImage}" alt="QR Code"/>
                     <p><strong>Owner:</strong> Arnold Adez</p>
                     <p><strong>Number:</strong> +254111783552</p>
+                    <p>Or use Pair Code: <code>!pair 254111783552</code></p>
                 </div>
                 <script>
                     setTimeout(() => { location.reload(); }, 30000);
@@ -72,10 +79,8 @@ async function startBot() {
             
             console.log(`❌ Disconnected: ${reason} (Status: ${statusCode})`);
 
-            // Only reconnect if it's a recoverable error
             if (statusCode === DisconnectReason.badSession) {
                 console.log('🔄 Bad session, resetting...');
-                // Delete session and restart
                 fs.rmSync(SESSION_DIR, { recursive: true, force: true });
                 fs.mkdirSync(SESSION_DIR);
                 setTimeout(startBot, 5000);
@@ -89,8 +94,8 @@ async function startBot() {
                 console.log('🔄 Restart required, restarting...');
                 setTimeout(startBot, 5000);
             } else {
-                console.log('⚠️ Unrecoverable error. Waiting 30s before retry...');
-                setTimeout(startBot, 30000); // Wait longer for 405 errors
+                console.log(`⚠️ Unrecoverable error. Waiting 30s before retry...`);
+                setTimeout(startBot, 30000);
             }
         }
 
@@ -99,7 +104,6 @@ async function startBot() {
             console.log('👤 Owner: Arnold Adez');
             console.log('📞 +254111783552');
             
-            // Update QR page to show connected
             const html = `
             <!DOCTYPE html>
             <html>
@@ -120,6 +124,7 @@ async function startBot() {
                     <div class="status online">🟢 ONLINE</div>
                     <p><strong>Owner:</strong> Arnold Adez</p>
                     <p><strong>Number:</strong> +254111783552</p>
+                    <p>Pair Code: <code>!pair 254111783552</code></p>
                 </div>
             </body>
             </html>
@@ -141,6 +146,36 @@ async function startBot() {
             const cmd = args[0].toLowerCase().replace('!', '');
 
             if (body.startsWith('!')) {
+                // --- PAIR CODE COMMAND ---
+                if (cmd === 'pair') {
+                    const number = args[1];
+                    if (!number) {
+                        await sock.sendMessage(from, { text: '❌ Provide phone number (e.g., !pair 254111783552)' });
+                        return;
+                    }
+                    
+                    try {
+                        const cleanNumber = number.replace(/[^0-9]/g, '');
+                        if (cleanNumber.length < 10) {
+                            await sock.sendMessage(from, { text: '❌ Invalid number! Use format: 254111783552' });
+                            return;
+                        }
+                        
+                        await sock.sendMessage(from, { text: `📱 Requesting pairing code for +${cleanNumber}...` });
+                        
+                        // Generate pairing code
+                        const code = await sock.requestPairingCode(cleanNumber);
+                        
+                        await sock.sendMessage(from, { text: `✅ Pairing code sent to +${cleanNumber}!\n\n📱 Code: ${code}\n\nOpen WhatsApp → Settings → Linked Devices → Link with Phone Number → Enter this code.` });
+                        
+                        console.log(`📱 Pairing code generated for +${cleanNumber}: ${code}`);
+                    } catch (e) {
+                        await sock.sendMessage(from, { text: `❌ Error: ${e.message}` });
+                    }
+                    return;
+                }
+
+                // Basic commands
                 if (cmd === 'ping') {
                     await sock.sendMessage(from, { text: 'Pong! 🏓' });
                 }
@@ -152,8 +187,9 @@ async function startBot() {
 📥 DOWNLOADER: play, video, instagram
 👑 OWNER: eval, restart, uptime
 ⚙️ SETTINGS: antibot, antispam
+📦 Use !help <command> for details
 
-📦 Use !help <command> for details` });
+🔑 PAIR: !pair <number>` });
                 }
                 if (cmd === 'owner') {
                     await sock.sendMessage(from, { text: '👤 Owner: Arnold Adez\n📞 +254111783552' });
