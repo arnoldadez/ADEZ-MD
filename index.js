@@ -1,11 +1,12 @@
 // ✅ Polyfill crypto for Render
 global.crypto = require('crypto');
 
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const express = require('express');
 const fs = require('fs');
 const pino = require('pino');
+const { Buffer } = require('buffer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,7 +22,9 @@ async function startBot() {
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: ['ADEZ MD', 'Chrome', '2.0.0']
+        browser: ['ADEZ MD', 'Chrome', '2.0.0'],
+        connectTimeoutMs: 60000, // 60 seconds timeout
+        keepAliveIntervalMs: 30000 // 30 seconds keep-alive
     });
 
     // QR Code Handler
@@ -64,9 +67,31 @@ async function startBot() {
         }
 
         if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.message || 'unknown';
-            console.log(`❌ Disconnected: ${reason}. Reconnecting in 5s...`);
-            setTimeout(startBot, 5000);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const reason = lastDisconnect?.error?.message || 'unknown';
+            
+            console.log(`❌ Disconnected: ${reason} (Status: ${statusCode})`);
+
+            // Only reconnect if it's a recoverable error
+            if (statusCode === DisconnectReason.badSession) {
+                console.log('🔄 Bad session, resetting...');
+                // Delete session and restart
+                fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+                fs.mkdirSync(SESSION_DIR);
+                setTimeout(startBot, 5000);
+            } else if (statusCode === DisconnectReason.connectionClosed) {
+                console.log('🔄 Connection closed, reconnecting...');
+                setTimeout(startBot, 5000);
+            } else if (statusCode === DisconnectReason.connectionLost) {
+                console.log('🔄 Connection lost, reconnecting...');
+                setTimeout(startBot, 5000);
+            } else if (statusCode === DisconnectReason.restartRequired) {
+                console.log('🔄 Restart required, restarting...');
+                setTimeout(startBot, 5000);
+            } else {
+                console.log('⚠️ Unrecoverable error. Waiting 30s before retry...');
+                setTimeout(startBot, 30000); // Wait longer for 405 errors
+            }
         }
 
         if (connection === 'open') {
