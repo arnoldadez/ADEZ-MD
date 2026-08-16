@@ -1,86 +1,122 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const express = require('express');
 const fs = require('fs');
-const config = require('./config');
-require('dotenv').config();
+const path = require('path');
+const pino = require('pino');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ NO PUPPETEER CONFIG - uses default Chrome from package
-const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: './session'
-    })
-});
+// Baileys doesn't need Puppeteer/Chrome — it's pure Node.js
 
-// QR Handler
-client.on('qr', async (qr) => {
-    console.log('📱 QR Code Generated');
-    const qrImage = await qrcode.toDataURL(qr);
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('./session');
     
-    const html = `
-    <!DOCTYPE html>
-    <html>
-    <head><title>ADEZ MD</title></head>
-    <body style="text-align:center;font-family:sans-serif;">
-        <h1>🔴 ADEZ MD</h1>
-        <div style="background:#25D366;color:white;padding:10px;">📱 Scan QR to Connect</div>
-        <img src="${qrImage}" style="width:300px;border:5px solid #25D366;border-radius:10px;"/>
-        <p><strong>Owner:</strong> Arnold Adez</p>
-        <p><strong>Number:</strong> +254111783552</p>
-    </body>
-    </html>
-    `;
-    fs.writeFileSync('./qr.html', html);
-});
+    const sock = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        auth: state,
+        browser: ['ADEZ MD', 'Chrome', '2.0.0']
+    });
 
-// Bot Ready
-client.on('ready', () => {
-    console.log('✅ ADEZ MD is ONLINE!');
-    console.log(`👤 Owner: ${config.owner.name}`);
-});
+    // QR Code Handler
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-// Message Handler
-client.on('message', async (msg) => {
-    const body = msg.body;
-    const args = body.split(' ');
-    const cmd = args[0].toLowerCase().replace(config.prefix, '');
+        if (qr) {
+            console.log('📱 QR Code Generated');
+            const qrImage = await qrcode.toDataURL(qr);
+            
+            const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>ADEZ MD WhatsApp Bot</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; background: #f0f0f0; padding: 20px; }
+                    .container { max-width: 400px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+                    img { width: 100%; max-width: 300px; border: 5px solid #25D366; border-radius: 10px; margin: 20px 0; }
+                    h1 { color: #25D366; }
+                    .status { background: #25D366; color: white; padding: 10px; border-radius: 5px; margin: 10px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🔴 ADEZ MD</h1>
+                    <div class="status">📱 Scan QR to Connect</div>
+                    <img src="${qrImage}" alt="QR Code"/>
+                    <p><strong>Owner:</strong> Arnold Adez</p>
+                    <p><strong>Number:</strong> +254111783552</p>
+                </div>
+                <script>
+                    setTimeout(() => { location.reload(); }, 30000);
+                </script>
+            </body>
+            </html>
+            `;
+            fs.writeFileSync('./qr.html', html);
+        }
 
-    if (body.startsWith(config.prefix)) {
-        if (cmd === 'ping') msg.reply('Pong! 🏓');
-        if (cmd === 'menu') {
-            msg.reply(`📌 ADEZ MD MENU
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error?.output?.statusCode || 'unknown';
+            console.log(`❌ Disconnected: ${reason}. Reconnecting...`);
+            setTimeout(startBot, 5000);
+        }
+
+        if (connection === 'open') {
+            console.log('✅ ADEZ MD is ONLINE!');
+            console.log('👤 Owner: Arnold Adez');
+            console.log('📞 +254111783552');
+        }
+    });
+
+    // Message Handler (Baileys style)
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.key.fromMe && msg.message) {
+            const body = msg.message.conversation || 
+                         msg.message.extendedTextMessage?.text || 
+                         '';
+            const from = msg.key.remoteJid;
+            const args = body.split(' ');
+            const cmd = args[0].toLowerCase().replace('!', '');
+
+            if (body.startsWith('!')) {
+                if (cmd === 'ping') {
+                    await sock.sendMessage(from, { text: 'Pong! 🏓' });
+                }
+                if (cmd === 'menu') {
+                    await sock.sendMessage(from, { text: `📌 ADEZ MD MENU
 
 🤖 AI: mistral, claudeai, bard
 👥 GROUP: tagall, kick, promote
 📥 DOWNLOADER: play, video, instagram
 👑 OWNER: eval, restart, uptime
-⚙️ SETTINGS: antibot, antispam
-📦 Use !help <command> for details`);
+⚙️ SETTINGS: antibot, antispam` });
+                }
+                if (cmd === 'owner') {
+                    await sock.sendMessage(from, { text: '👤 Owner: Arnold Adez\n📞 +254111783552' });
+                }
+            }
         }
-        if (cmd === 'owner') msg.reply(`👤 Owner: ${config.owner.name}\n📞 ${config.owner.number}`);
-        if (cmd === 'uptime') {
-            const uptime = process.uptime();
-            const hours = Math.floor(uptime / 3600);
-            const minutes = Math.floor((uptime % 3600) / 60);
-            msg.reply(`🟢 Uptime: ${hours}h ${minutes}m`);
-        }
-    }
-});
+    });
 
-// Web UI
+    // Save credentials on update
+    sock.ev.on('creds.update', saveCreds);
+}
+
+// Express Web UI
 app.get('/', (req, res) => {
     if (fs.existsSync('./qr.html')) {
         res.sendFile(__dirname + '/qr.html');
     } else {
-        res.send('🔴 Waiting for QR... Refresh in 10s');
+        res.send('🔴 ADEZ MD - Waiting for QR... Refresh in 10s');
     }
 });
 
 app.listen(PORT, () => {
     console.log(`🌐 Web UI: http://localhost:${PORT}`);
+    startBot();
 });
-
-client.initialize();
