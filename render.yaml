@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: adez-md
+    env: node
+    buildCommand: npm install
+    startCommand: npm run render-start
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: MONGODB_URI
+        value: mongodb+srv://yourusername:yourpassword@cluster.mongodb.net/adez-md
+      - key: OPENAI_API_KEY
+        value: your-openai-key
+      - key: GEMINI_API_KEY
+        value: your-gemini-key
+      - key: ANTHROPIC_API_KEY
+        value: your-anthropic-key
+    autoDeploy: true
