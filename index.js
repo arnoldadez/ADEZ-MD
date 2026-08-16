@@ -6,27 +6,35 @@ const path = require('path');
 const config = require('./config');
 require('dotenv').config();
 
-// Express for QR Web UI
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// WhatsApp Client
+// Force Puppeteer to use Render's Chrome
+const chromePath = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
+
 const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: './session'
     }),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        executablePath: chromePath,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
     }
 });
 
-// QR Code Handler
 client.on('qr', async (qr) => {
     console.log('📱 QR Code Generated - Scan with WhatsApp');
     const qrImage = await qrcode.toDataURL(qr);
     
-    // Save QR to HTML
     const html = `
     <!DOCTYPE html>
     <html>
@@ -39,7 +47,6 @@ client.on('qr', async (qr) => {
             img { width: 100%; max-width: 300px; border: 5px solid #25D366; border-radius: 10px; margin: 20px 0; }
             h1 { color: #25D366; }
             .status { background: #25D366; color: white; padding: 10px; border-radius: 5px; margin: 10px 0; }
-            .footer { color: #666; font-size: 14px; margin-top: 20px; }
         </style>
     </head>
     <body>
@@ -49,7 +56,6 @@ client.on('qr', async (qr) => {
             <img src="${qrImage}" alt="QR Code"/>
             <p><strong>Owner:</strong> Arnold Adez</p>
             <p><strong>Number:</strong> +254111783552</p>
-            <div class="footer">🟢 Bot Status: Connecting...</div>
         </div>
         <script>
             setTimeout(() => { location.reload(); }, 30000);
@@ -60,25 +66,18 @@ client.on('qr', async (qr) => {
     fs.writeFileSync('./qr.html', html);
 });
 
-// Bot Ready
 client.on('ready', () => {
     console.log('✅ ADEZ MD is ONLINE!');
     console.log(`👤 Owner: ${config.owner.name}`);
     console.log(`📞 ${config.owner.number}`);
-    // Update HTML status
-    const html = fs.readFileSync('./qr.html', 'utf8');
-    const updated = html.replace('Connecting...', '✅ ONLINE').replace('🟢', '🟢');
-    fs.writeFileSync('./qr.html', updated);
 });
 
-// Message Handler
 client.on('message', async (msg) => {
     const body = msg.body;
     const args = body.split(' ');
     const cmd = args[0].toLowerCase().replace(config.prefix, '');
 
     if (body.startsWith(config.prefix)) {
-        // Basic Commands
         if (cmd === 'ping') msg.reply('Pong! 🏓');
         if (cmd === 'menu') {
             msg.reply(`📌 ADEZ MD MENU
@@ -104,7 +103,6 @@ client.on('message', async (msg) => {
     }
 });
 
-// Express Routes
 app.get('/', (req, res) => {
     if (fs.existsSync('./qr.html')) {
         res.sendFile(__dirname + '/qr.html');
@@ -121,15 +119,8 @@ app.get('/status', (req, res) => {
     });
 });
 
-// Start Express
 app.listen(PORT, () => {
     console.log(`🌐 Web UI: http://localhost:${PORT}`);
 });
 
-// Initialize Bot
 client.initialize();
-
-// Keep Alive
-setInterval(() => {
-    console.log('🔄 Keep alive ping');
-}, 600000); // 10 minutes
