@@ -1,3 +1,4 @@
+const crypto = require('crypto'); // ✅ ADD THIS LINE
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const express = require('express');
@@ -66,7 +67,6 @@ async function startBot() {
             const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.message || 'unknown';
             console.log(`❌ Disconnected: ${reason}. Reconnecting in 5s...`);
             
-            // If QR not scanned, keep trying
             setTimeout(startBot, 5000);
         }
 
@@ -117,7 +117,6 @@ async function startBot() {
             const cmd = args[0].toLowerCase().replace('!', '');
 
             if (body.startsWith('!')) {
-                // Basic commands
                 if (cmd === 'ping') {
                     await sock.sendMessage(from, { text: 'Pong! 🏓' });
                 }
@@ -145,7 +144,6 @@ async function startBot() {
         }
     });
 
-    // Save credentials on update
     sock.ev.on('creds.update', saveCreds);
 }
 
