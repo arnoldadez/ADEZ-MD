@@ -1,35 +1,18 @@
 {
   "name": "adez-md",
   "version": "2.0.0",
-  "description": "WhatsApp Bot by Arnold Adez",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "render-start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome --path /opt/render/.cache/puppeteer"
+    "render-start": "node index.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0",
     "qrcode-terminal": "^0.12.0",
-    "mongoose": "^8.0.0",
-    "axios": "^1.6.0",
-    "sharp": "^0.33.0",
-    "fluent-ffmpeg": "^2.1.2",
-    "ytdl-core": "^4.11.0",
-    "cheerio": "^1.0.0",
-    "node-fetch": "^3.3.0",
-    "openai": "^4.0.0",
-    "@google/generative-ai": "^0.1.0",
-    "@anthropic-ai/sdk": "^0.9.0",
-    "qrcode": "^1.5.0",
-    "moment-timezone": "^0.5.43",
-    "fs-extra": "^11.1.0",
-    "dotenv": "^16.0.0",
     "express": "^4.18.0",
-    "instagram-url-direct": "^1.0.0",
-    "tiktok-scraper": "^1.0.0",
-    "googleapis": "^125.0.0",
-    "puppeteer": "^23.0.0"
+    "qrcode": "^1.5.0",
+    "dotenv": "^16.0.0",
+    "chrome": "^0.1.0"
   },
   "engines": {
     "node": "18.x"
